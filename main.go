@@ -4,9 +4,12 @@ import (
 	"api/types"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func getWeather(city string) types.WeatherResult {
@@ -20,7 +23,7 @@ func queryOrder(orderID string) types.OrderResult {
 func weatherToolHandler(ctx context.Context, req *mcp.CallToolRequest, params *types.WeatherParams) (*mcp.CallToolResult, any, error) {
 	r := getWeather(params.City)
 	return &mcp.CallToolResult{
-		Content: []mcp.Context{&mcp.TextContent{Text: r.City + " " + r.Condition + ", 温度" + r.Temp + "摄氏度"}},
+		Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("%s %s, 温度%d度", r.City, r.Condition, r.Temp)}},
 	}, r, nil
 }
 
@@ -38,14 +41,15 @@ func weatherHTTPHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		City string `json:"city"`
-	}
+	var req types.WeatherParams
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "BodRequest", http.StatusBadRequest)
+		http.Error(w, "BadRequest", http.StatusBadRequest)
 		return
 	}
+
+	value, _ := json.MarshalIndent(req, "", "    ")
+	fmt.Println(string(value))
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(getWeather(req.City))
 }
@@ -56,26 +60,30 @@ func orderHTTPHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		OrderID string `json:"city"`
-	}
+	var req types.OrderParams
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "BodRequest", http.StatusBadRequest)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(getWeather(req.OrderID))
+	json.NewEncoder(w).Encode(queryOrder(req.OrderID))
+}
+
+func healthHTTPHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "OK"})
 }
 
 func main() {
 	// 1. 创建 MCP Server（全局只做一次）
-	server := mcp.NewServe(&mcp.Implementation{Name: "MultiInterfaceServer", Version: "1.0.0"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "MultiInterfaceServer", Version: "1.0.0"}, nil)
 	// 2. 注册所有 MCP 工具（每个工具一行注册声明）
 	mcp.AddTool(server, &mcp.Tool{Name: "get_weather", Description: "查询指定城市的天气"}, weatherToolHandler)
 	mcp.AddTool(server, &mcp.Tool{Name: "query_order", Description: "根据订单号查询订单状态"}, orderToolHandler)
 	// 3. 创建 MCP 的 Streamable HTTP Handler（全局只做一次）
-	mcpHandler := mcp.NewStreamableHTTPHandler(server, nil)
+	mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server { return server }, nil)
 	// 4. 创建路由表，挂载 MCP 端点和普通 HTTP 端点
 	mux := http.NewServeMux()
 	// MCP 端点（供 AI 客户端使用）
@@ -84,10 +92,7 @@ func main() {
 	mux.HandleFunc("/api/weather", weatherHTTPHandler)
 	mux.HandleFunc("/api/order", orderHTTPHandler)
 
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	})
+	mux.HandleFunc("/health", healthHTTPHandler)
 
 	srv := &http.Server{
 		Addr:         "0.0.0.0:8000",
