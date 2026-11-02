@@ -1,0 +1,15 @@
+[[users]]
+id = 1 #对内主键
+uid = "asdfds" #UUID生成对外索引
+name = "zhangtao"
+email = "zhangtao@163.com"
+api_key = "zhangtao@123" #网关凭证
+allowed = ["deepseek-*", "qwen-*", "qwen[0-9]*"]
+enabled = true
+#请求次数配额
+daily_request_limit = 100
+daily_request_used = 0
+#Token配额
+daily_token_limit = 1000000
+daily_token_used = 0
+created_at = 2026-11-02T10:00:00Z
