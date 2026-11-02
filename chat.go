@@ -1,4 +1,9 @@
-package types
+package main
+
+import (
+	"encoding/json"
+	"net/http"
+)
 
 type ContentBlock struct {
 	Type     string    `json:"type"` // text/image_url/input_audio
@@ -49,6 +54,7 @@ type ImageURL struct {
 }
 
 type GatewayRequest struct {
+	Provider string    `json:"provider"`
 	Model    string    `json:"model"`
 	Messages []Message `json:"messages"`
 	Steam    bool      `json:"stream,omitempty"`
@@ -68,4 +74,28 @@ type GatewayRequest struct {
 	// 透传字段：各厂商特有参数放置位置，避免污染核心结构
 	// 例如Qwen的result_format、top_k、repetition_penalty等
 	Extra map[string]any `json:"-"`
+}
+
+func ChatHandler(w http.ResponseWriter, r *http.Request) {
+	var req GatewayRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	if err := checkRequest(req); err != nil { //对用户请求参数进行统一校验
+		return
+	}
+
+
+
+}
+
+func checkRequest(p GatewayRequest) error {
+	return nil
+}
+
+func writeJSON(w http.ResponseWriter, code int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(v)
 }

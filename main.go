@@ -7,5 +7,5 @@ import (
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", HandlerHealth)
-	mux.HandleFunc("POST /chat", HandlerChat) // 注册
+	mux.HandleFunc("POST /chat", ChatHandler) // 注册
 }
