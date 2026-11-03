@@ -9,7 +9,7 @@ type User struct {
 	UID               string    `toml:"uid"`
 	Name              string    `toml:"name"`
 	Email             string    `toml:"email"`
-	APIKey            string    `toml:"api_key"`
+	APIKey            []string  `toml:"api_key"` // 网关用户调用凭证
 	AllowedModels     []string  `toml:"allowed_models"`
 	Enable            bool      `toml:"enable"`
 	DailyRequestLimit int       `toml:"daily_request_limit"`

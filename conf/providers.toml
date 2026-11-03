@@ -1,0 +1,20 @@
+[[providers]]
+name = "openai"
+type = "openai"
+base_url = "https://api.openai.com/v1"
+api_key = ["sk-..."]
+models = ["gpt-4o", "gpt-4o-mini", "dall-e-3"]
+
+[[providers]]
+name = "qwen"
+type = "openai" #千问兼容OpenAI协议，利用OpenAIProvider实现
+base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+api_key = "sk-..."
+models = ["qwen-max", "qwen-plus", "qwen-image"]
+
+[[providers]]
+name = "deepseek"
+type = "openai"
+base_url = "https://api.deepseeks.com/v1"
+api_key = "sk-..."
+models = ["deepseek-chat", "deepseek-reasoner"]
