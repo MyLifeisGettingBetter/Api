@@ -1,106 +1,28 @@
 package provider
 
 import (
-	"api/types"
-	"bytes"
-	"context"
-	"encoding/json"
-	"fmt"
 	"net/http"
+	"sync/atomic"
 )
 
-type Anthropic struct {
-	APIKey string
+type AnthropicProvider struct {
+	apiKeys []string
+	baseURL string
+	client  *http.Client
+	counter atomic.Uint64
 }
 
-type anthropicRequest struct {
-	Model     string          `json:"model"`
-	Messages  []types.Message `json:"messages"`
-	MaxTokens int             `json:"max_tokens"`
-	Stream    bool            `json:"stream"`
+func NewAnthropic(apiKeys []string, baseURL string) *AnthropicProvider {
+	return &AnthropicProvider{apiKeys: apiKeys, baseURL: baseURL, client: &http.Client{}}
 }
 
-type anthropicContentBlockDelta struct {
-	Delta struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	} `json:"delta"`
-}
-
-type anthropicMessageStart struct {
-	Message struct {
-		Usage struct {
-			InputTokens int `json:"input_tokens"`
-		} `json:"usage"`
-	} `json:"message"`
-}
-
-type anthropicMessageDelta struct {
-	Usage struct {
-		OutputTokens int `json:"output_tokens"`
-	} `json:"usage"`
-}
-
-type anthropicError struct {
-	Error struct {
-		Message string `json:"message"`
-	} `json:"error"`
-}
-
-func (a *Anthropic) BuildRequest(ctx context.Context, req types.ChatRequest) (*http.Request, error) {
-	body := anthropicRequest{
-		Model:     req.Model,
-		Messages:  req.Messages,
-		MaxTokens: 4096,
-		Stream:    true,
+func (p *AnthropicProvider) Name() string         { return "anthropic" }
+func (p *AnthropicProvider) Client() *http.Client { return p.client }
+func (p *AnthropicProvider) BaseURL() string      { return p.baseURL }
+func (p *AnthropicProvider) NextAPIKey() string {
+	if len(p.apiKeys) == 0 {
+		return ""
 	}
-	b, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("anthropic: marshal request: %w", err)
-	}
-	r, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.anthropic.com/v1/messages", bytes.NewReader(b))
-	if err != nil {
-		return nil, fmt.Errorf("anthropic: build request: %w", err)
-	}
-	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("x-api-key", a.APIKey)
-	r.Header.Set("anthropic-version", "2023-06-01")
-	return r, nil
-}
-
-func (a *Anthropic) ParseEvent(eventType, data string) (*types.Chunk, error) {
-	switch eventType {
-	case "content_block_delta":
-		var payload anthropicContentBlockDelta
-		if err := json.Unmarshal([]byte(data), &payload); err != nil {
-			return nil, fmt.Errorf("anthropic: parse content_block_delta: %w", err)
-		}
-		return &types.Chunk{Content: payload.Delta.Text}, nil
-	case "message_start":
-		var payload anthropicMessageStart
-		if err := json.Unmarshal([]byte(data), &payload); err != nil {
-			return nil, fmt.Errorf("anthropic: parse message_start: %w", err)
-		}
-		return &types.Chunk{
-			Usage: &types.Usage{
-				InputTokens: payload.Message.Usage.InputTokens,
-			},
-		}, nil
-	case "message_delta":
-		var payload anthropicMessageDelta
-		if err := json.Unmarshal([]byte(data), &payload); err != nil {
-			return nil, fmt.Errorf("anthropic: parse message_delta: %w", err)
-		}
-		return &types.Chunk{Usage: &types.Usage{OutputTokens: payload.Usage.OutputTokens}}, nil
-	case "message_stop":
-		return &types.Chunk{Done: true}, nil
-	case "error":
-		var payload anthropicError
-		if err := json.Unmarshal([]byte(data), &payload); err != nil {
-			return nil, fmt.Errorf("anthropic: parse error event: %w", err)
-		}
-		return &types.Chunk{Err: fmt.Errorf("anthropic: %s", payload.Error.Message)}, nil
-	default:
-		return nil, nil
-	}
+	n := p.counter.Add(1) - 1
+	return p.apiKeys[n%uint64(len(p.apiKeys))]
 }
